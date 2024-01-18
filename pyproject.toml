@@ -1,0 +1,23 @@
+[project]
+name = "paprika2notion"
+version = "0.1"
+description = "Utility to assist with exporting recipes stored in Paprika to a Notion Database."
+authors = [
+  { name = "Tyler Roberts", email = "tylerroberts.sgc@gmail.com" },
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "pyyaml",
+    "pydantic",
+]
+
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
