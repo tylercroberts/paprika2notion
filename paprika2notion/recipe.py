@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import time
 import datetime
 import gzip
 import hashlib
 import json
+from loguru import logger
 import uuid
 from dataclasses import asdict, dataclass, field, fields
 from typing import IO, Any, Dict, List, Type, TypeVar, Optional, Iterable
@@ -13,6 +15,11 @@ from .enums import RecipeStatusEnum, RecipeMealTypeEnum
 T = TypeVar("T", bound="PaprikaRecipe")
 TNotionRecipe = TypeVar("TNotionRecipe", bound="NotionRecipe")
 DEFAULT_DELIM = "\n==========================\n" # Should be moved to some constants file.
+
+def sleep_util(sleep_time: int=30):
+    logger.debug(f"Sleeping {sleep_time}s to avoid rate-limit")
+    time.sleep(sleep_time)
+
 
 @dataclass
 class PaprikaRecipe:
@@ -28,6 +35,7 @@ class PaprikaRecipe:
     difficulty: str = ""
     directions: str = ""
     hash: str = field(
+        # Will this be consistent w/ the UID below if none are provided at all? Also, it doesn't use upper like the actual UUID file)
         default_factory=lambda: hashlib.sha256(
             str(uuid.uuid4()).encode("utf-8")
         ).hexdigest()
@@ -121,6 +129,10 @@ class NotionRecipe:
 
         )
 
+    @classmethod
+    def from_notion_api(cls: Type[TNotionRecipe], notion_api_item: Dict[str, Any]) -> TNotionRecipe:
+        raise NotImplementedError
+
     @staticmethod
     def _gen_recipe_write_up_from_paprika(paprika_recipe, delim: str):
         """TODO: There are many more things that could be included here."""
@@ -198,7 +210,7 @@ class NotionRecipe:
 
         :return:
         """
-        page = {}
+        page = dict()
         page['parent'] = {"database_id": database_id}
         page.update(self.get_all_properties())
         return page
@@ -209,3 +221,115 @@ class NotionRecipe:
         Then we need to do something to extract the ingredient token. Some sort of NLTK utility may help here.
         """
         raise NotImplementedError
+
+    def write_to_notion(self, notion_client, database_id):
+        all_notion_rows = self.get_all_notion_rows(notion_client, database_id, self.paprika_hash)
+        # TODO: If this just returns NotionRecipe items, it would be easier to do this check.
+        matching_notion_row = [
+            row for row in all_notion_rows
+            if row['properties']['Paprika Hash']['rich_text'][0]['text']['content'] == self.paprika_hash
+        ]
+
+        n_matches = len(matching_notion_row)
+        assert n_matches < 2, "Duplicates are present in the notion database"
+
+        if n_matches == 1:
+            logger.info(f"Notion already contains data for: {self.recipe} - {self.paprika_hash}")
+
+            #TODO: Add some sort of last update concept
+            # For now, we just
+
+
+            # mendeleyTime = it.last_modified.to('US/Pacific')
+            # notionTime = arrow.get(notionRow['last_edited_time']).to('US/Pacific')
+
+            # last modified time on Mendeley is AFTER last edited time on Notion
+            # if mendeleyTime > notionTime:
+            #     logger.debug(f'Updating row {notionRow["id"]} in notion')
+            #     pageID = notionRow['id']
+            #     propObj = getPropertiesForMendeleyDoc(it, localPrefix=mendeley_filepath)
+            #     notionPage = getNotionPageEntryFromPropObj(propObj)
+            #     try:
+            #         notion.pages.update(pageID, properties=notionPage)
+            #     except:
+            #         sleep_util(30)
+            #         notion.pages.update(pageID, properties=notionPage)
+
+            # else:  # Nothing to update
+            #     pass
+
+        elif n_matches == 0:
+            logger.debug(f'No results matched query for {self.recipe} - {self.paprika_hash}. Creating new row')
+            # extract properties and format it well
+            notion_page = self.gen_page_template(database_id)
+            try:
+                notion_client.pages.create(parent={"database_id": database_id}, properties=notion_page)
+            except:  # TODO: See note in `get_all_notion_rows()` about this sleeping on _any_ error.
+                sleep_util(30)
+                notion_client.pages.create(parent={"database_id": database_id}, properties=notion_page)
+
+        else:
+            raise NotImplementedError
+
+    @classmethod
+    def get_all_notion_rows(cls: Type[TNotionRecipe], notion_client,
+                            database_id: str, recipe_hash: str=None) -> List[TNotionRecipe]:
+        """
+        Gets all rows (pages) from a notion database using a notion client
+        # TODO: Currently if there are _any_ errors, it waits 30s before failing.
+        # TODO: Could make the try-excepts a bit more specific to enable fast-failing
+
+        Args:
+            notion_client: (notion Client) Notion client object
+            database_id: (str) string code id for the relevant database
+            recipe_hash: (str) string hash for a given recipe. If provided, will only query for that ID
+        Returns:
+            all_notion_rows: (list of notion rows)
+            # TODO: convert to NotionRecipe objects
+
+        """
+        start = time.time()
+        has_more = True
+        all_notion_rows = list()
+        i = 0
+        request_payload = {"database_id": database_id}
+        next_cursor = None
+
+        if recipe_hash is not None:
+            request_payload.update({"filter": {"property": "Paprika Hash", "text": {"equals": recipe_hash}}})
+
+        # Will try to get _all_ rows if no
+        while has_more:
+            if i == 0:
+                try:
+                    query = notion_client.databases.query(
+                        **request_payload
+                    )
+                except:
+                    sleep_util(30)
+                    query = notion_client.databases.query(
+                        **request_payload
+                    )
+
+            else:
+                request_payload.update({"start_cursor": next_cursor})
+                try:
+                    query = notion_client.databases.query(
+                        **request_payload
+                    )
+                except:
+                    sleep_util(30)
+                    query = notion_client.databases.query(
+                        **request_payload
+                    )
+
+            all_notion_rows.extend(query['results'])
+            next_cursor = query['next_cursor']
+            has_more = query['has_more']
+            i += 1
+
+        end = time.time()
+        logger.info('Number of rows in notion currently: ' + str(len(all_notion_rows)))
+        logger.info('Total time taken: ' + str(end - start))
+
+        return all_notion_rows

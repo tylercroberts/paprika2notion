@@ -16,6 +16,8 @@ requires-python = ">=3.8"
 dependencies = [
     "pyyaml",
     "pydantic",
+    "notion-client",
+    "loguru",
 ]
 
 [build-system]
