@@ -17,15 +17,23 @@ Once you have downloaded these, it is as straightforward as:
 # Contribution
 
 There are a number of ways to contribute to paprika2notion.
+
 - Check out open Issues and submit a PR to resolve one
   - if you don't want to submit a PR, feel free to join the discussion on these issues anyways!
 - Use the tool and make improvements to solve your pain points
-  - Find something annoying? We'd love your help fixing it! Anything that could make this a more seamless tool.
+  - Find something annoying? We'd love your help fixing it! Anything that could make this a more seamless tool is probably welcome.
+  - 
 
-- Some planned items that you're free to take a stab at first:
+- Some planned items that you're free to take a stab at before I get to them:
   - Automatically create appropriate Database/Page/Schema in Notion from tool
   - Automatically add all ingredient relations
     - If ingredient doesn't exist, create an appropriate one
   
 - Just ask! Feel free to reach out to me and ask if there's anything you can do to help with the project. Almost certainly we have some backlog items.
-  
+
+
+With any pull request, please include at minimum:
+- Doc strings for any major functions/methods.
+- a test case walkthrough.
+
+If you're feeling especially helpful create a test using pytest and run it with `cov` after your changes.

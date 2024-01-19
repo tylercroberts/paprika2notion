@@ -12,7 +12,7 @@ from .enums import RecipeStatusEnum, RecipeMealTypeEnum
 
 T = TypeVar("T", bound="PaprikaRecipe")
 TNotionRecipe = TypeVar("TNotionRecipe", bound="NotionRecipe")
-
+DEFAULT_DELIM = "\n==========================\n" # Should be moved to some constants file.
 
 @dataclass
 class PaprikaRecipe:
@@ -104,14 +104,15 @@ class NotionRecipe:
                 str(uuid.uuid4()).encode("utf-8")
             ).hexdigest()
         )
+    write_up_delim: str = field(default_factory=lambda: DEFAULT_DELIM)
 
     @classmethod
     def from_paprika(cls: Type[TNotionRecipe], paprika_recipe: PaprikaRecipe) -> TNotionRecipe:
-        """Unfortunately, there's not a great way to go back `to_paprika()`given the way the write_up is constructed.
+        """TODO: WIP Unfortunately, there's not a great way to go back `to_paprika()`given the way the write_up is constructed.
         Can maybe add some sort of string separator to enable it to be backwards compatible."""
         return cls(
             recipe=paprika_recipe.name,
-            recipe_write_up=cls._gen_recipe_write_up_from_paprika(paprika_recipe),
+            recipe_write_up=cls._gen_recipe_write_up_from_paprika(paprika_recipe, DEFAULT_DELIM),
             meal_type=RecipeMealTypeEnum.FROM_PAPRIKA,
             status=RecipeStatusEnum.FROM_PAPRIKA,
             url=paprika_recipe.source_url,
@@ -121,10 +122,10 @@ class NotionRecipe:
         )
 
     @staticmethod
-    def _gen_recipe_write_up_from_paprika(paprika_recipe):
+    def _gen_recipe_write_up_from_paprika(paprika_recipe, delim: str):
         """TODO: There are many more things that could be included here."""
         directions = paprika_recipe.directions.replace("\n\n", "\n").split("\n")
-        out = f"{paprika_recipe.ingredients}\n\n{directions}"
+        out = f"{paprika_recipe.ingredients}{delim}{directions}"
         return out
 
 
@@ -184,13 +185,27 @@ class NotionRecipe:
         properties.update(self.get_recipe_write_up_property())
         properties.update(self.get_meal_type_property())
         properties.update(self.get_status_property())
+        properties.update(self.get_url_property())
+        properties.update(self.get_tags_property())
         return {"properties": properties}
 
 
-    def _create_page_template(self):
+    def gen_page_template(self, database_id: str) -> Dict[str, Any]:
+        """
+        Main entrypoint for generating the page template to POST via Notion API. See each individual function in
+        `get_all_properties()` for details on any available kwargs.
 
+
+        :return:
+        """
         page = {}
-        page['parent'] = {"database_id": ""}
+        page['parent'] = {"database_id": database_id}
         page.update(self.get_all_properties())
+        return page
 
-
+    def gen_ingredient_pages(self):
+        """
+        Get the first element of the recipe write_up, which contains all the ingredients. Splits these by `\n`.
+        Then we need to do something to extract the ingredient token. Some sort of NLTK utility may help here.
+        """
+        raise NotImplementedError
