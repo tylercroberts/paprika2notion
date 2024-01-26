@@ -21,11 +21,12 @@ class IngredientStatusEnum(Enum):
     SHOPPING_LIST = "Shopping List"
     IN_STOCK = "In Stock"
 
+
 class IngredientTypeEnum(Enum):
-    raise NotImplementedError
+    pass
 
 class IngredientStoreEnum(Enum):
-    raise NotImplementedError
+    pass
 
 
 ##################################

@@ -14,7 +14,8 @@ from .enums import RecipeStatusEnum, RecipeMealTypeEnum
 
 T = TypeVar("T", bound="PaprikaRecipe")
 TNotionRecipe = TypeVar("TNotionRecipe", bound="NotionRecipe")
-DEFAULT_DELIM = "\n==========================\n" # Should be moved to some constants file.
+SLEEP_PERIOD = 5
+
 
 def sleep_util(sleep_time: int=30):
     logger.debug(f"Sleeping {sleep_time}s to avoid rate-limit")
@@ -100,10 +101,15 @@ class PaprikaRecipe:
 
 @dataclass
 class NotionRecipe:
+    #TODO: This should query to get exact ID for fields, but will work for now with field names.
+
     recipe: str = ""
     recipe_write_up: str = ""
+    recipe_write_up_overflow: str = ""
+    ingredients_text: str = ""
     meal_type: Optional[RecipeMealTypeEnum] = None
     status: Optional[RecipeStatusEnum] = None
+    nutritional_info: str= ""
     ingredients: Any = None
     meal_plan: Any = None
     url: str = ""
@@ -112,20 +118,27 @@ class NotionRecipe:
                 str(uuid.uuid4()).encode("utf-8")
             ).hexdigest()
         )
-    write_up_delim: str = field(default_factory=lambda: DEFAULT_DELIM)
 
     @classmethod
     def from_paprika(cls: Type[TNotionRecipe], paprika_recipe: PaprikaRecipe) -> TNotionRecipe:
         """TODO: WIP Unfortunately, there's not a great way to go back `to_paprika()`given the way the write_up is constructed.
-        Can maybe add some sort of string separator to enable it to be backwards compatible."""
+        Can maybe add some sort of string separator to enable it to be backwards compatible.
+
+        Since text fields must be <2000 words in API calls, this is fine. We can separate as needed.
+
+        """
+
         return cls(
             recipe=paprika_recipe.name,
-            recipe_write_up=cls._gen_recipe_write_up_from_paprika(paprika_recipe, DEFAULT_DELIM),
+            recipe_write_up=cls._gen_recipe_write_up_from_paprika(paprika_recipe),
+            recipe_write_up_overflow=cls._gen_recipe_write_up_overflow_from_paprika(paprika_recipe),
+            ingredients_text=cls._parse_ingredients_string_from_paprika(paprika_recipe),
             meal_type=RecipeMealTypeEnum.FROM_PAPRIKA,
             status=RecipeStatusEnum.FROM_PAPRIKA,
             url=paprika_recipe.source_url,
             tags=paprika_recipe.categories,
             paprika_hash=paprika_recipe.hash,
+            nutritional_info=
 
         )
 
@@ -134,12 +147,23 @@ class NotionRecipe:
         raise NotImplementedError
 
     @staticmethod
-    def _gen_recipe_write_up_from_paprika(paprika_recipe, delim: str):
+    def _gen_recipe_write_up_from_paprika(paprika_recipe):
         """TODO: There are many more things that could be included here."""
-        directions = paprika_recipe.directions.replace("\n\n", "\n").split("\n")
-        out = f"{paprika_recipe.ingredients}{delim}{directions}"
-        return out
+        directions = paprika_recipe.directions.replace("\n\n", "\n")
+        out = f"{directions}"
+        return out[:2000]
 
+    @staticmethod
+    def _gen_recipe_write_up_overflow_from_paprika(paprika_recipe):
+        """TODO: There are many more things that could be included here."""
+        directions = paprika_recipe.directions.replace("\n\n", "\n")
+        out = f"{directions}"
+        return out[2000:]
+
+    @staticmethod
+    def _parse_ingredients_string_from_paprika(paprika_recipe):
+        ingredients_str = "\n".join(["- " + i for i in paprika_recipe.ingredients.split("\n")])
+        return ingredients_str
 
 
     def get_title_property(self):
@@ -147,10 +171,12 @@ class NotionRecipe:
             "Recipe": {
                 "title": [
                     {
+                        "type": "text",
                         "text": {
                             "content": self.recipe
                         }
                     }
+
                 ]
             }
         }
@@ -162,6 +188,30 @@ class NotionRecipe:
                     {
                         "text": {
                             "content": self.recipe_write_up
+                        }
+                    }
+                ]
+            }
+        }
+    def get_recipe_write_up_overflow_property(self):
+        return {
+            "Recipe write-up overflow": {
+                "rich_text": [
+                    {
+                        "text": {
+                            "content": self.recipe_write_up_overflow
+                        }
+                    }
+                ]
+            }
+        }
+    def get_ingredients_text_property(self):
+        return {
+            "Ingredients Text": {
+                "rich_text": [
+                    {
+                        "text": {
+                            "content": self.ingredients_text
                         }
                     }
                 ]
@@ -183,24 +233,45 @@ class NotionRecipe:
         }
 
     def get_url_property(self):
-        return { 'URL': {'id': 'xOUe', 'type': 'url', 'url': self.url}}
+        return {'URL':
+                    {
+                        'type': 'url',
+                        'url': self.url
+                    }
+        }
 
     def get_tags_property(self):
         return {
-        "Tags": {'id': 'yzKx',
-            'type': 'multi_select',
-            'multi_select': [{"name": t for t in self.tags}]}
+            "Tags": {
+                'type': 'multi_select',
+                'multi_select': [{"name": t for t in self.tags}]}
         }
+
+    def get_paprika_hash(self):
+        return {
+            "Paprika Hash": {
+                "rich_text": [
+                    {
+                        "text": {
+                            "content": self.paprika_hash
+                        }
+                    }
+                ]
+            }
+        }
+
     def get_all_properties(self):
         properties = {}
         properties.update(self.get_title_property())
         properties.update(self.get_recipe_write_up_property())
+        properties.update(self.get_recipe_write_up_overflow_property())
         properties.update(self.get_meal_type_property())
+        properties.update(self.get_ingredients_text_property())
         properties.update(self.get_status_property())
         properties.update(self.get_url_property())
         properties.update(self.get_tags_property())
-        return {"properties": properties}
-
+        properties.update(self.get_paprika_hash())
+        return properties
 
     def gen_page_template(self, database_id: str) -> Dict[str, Any]:
         """
@@ -211,8 +282,9 @@ class NotionRecipe:
         :return:
         """
         page = dict()
-        page['parent'] = {"database_id": database_id}
-        page.update(self.get_all_properties())
+        properties = self.get_all_properties()
+        page["database_id"] = database_id
+        page.update({"properties": properties})
         return page
 
     def gen_ingredient_pages(self):
@@ -223,7 +295,10 @@ class NotionRecipe:
         raise NotImplementedError
 
     def write_to_notion(self, notion_client, database_id):
-        all_notion_rows = self.get_all_notion_rows(notion_client, database_id, self.paprika_hash)
+        #TODO: Maybe just write a `bulk` write_to_notion` as well,
+        # similar functionality to the CLI, so we can just call this there.
+
+        all_notion_rows = self.get_all_notion_rows(notion_client, database_id, recipe_hash=self.paprika_hash)
         # TODO: If this just returns NotionRecipe items, it would be easier to do this check.
         matching_notion_row = [
             row for row in all_notion_rows
@@ -234,10 +309,10 @@ class NotionRecipe:
         assert n_matches < 2, "Duplicates are present in the notion database"
 
         if n_matches == 1:
-            logger.info(f"Notion already contains data for: {self.recipe} - {self.paprika_hash}")
-
+            logger.debug(f"Notion already contains data for: {self.recipe} - {self.paprika_hash}")
+            pass
             #TODO: Add some sort of last update concept
-            # For now, we just
+            # For now, we just check if the `paprika_hash` exists, if so, skip.
 
 
             # mendeleyTime = it.last_modified.to('US/Pacific')
@@ -259,14 +334,14 @@ class NotionRecipe:
             #     pass
 
         elif n_matches == 0:
-            logger.debug(f'No results matched query for {self.recipe} - {self.paprika_hash}. Creating new row')
+            logger.info(f'No results matched query for {self.recipe} - {self.paprika_hash}. Creating new row')
             # extract properties and format it well
-            notion_page = self.gen_page_template(database_id)
+            notion_properties = self.get_all_properties()
             try:
-                notion_client.pages.create(parent={"database_id": database_id}, properties=notion_page)
+                notion_client.pages.create(parent={"database_id": database_id}, properties=notion_properties)
             except:  # TODO: See note in `get_all_notion_rows()` about this sleeping on _any_ error.
-                sleep_util(30)
-                notion_client.pages.create(parent={"database_id": database_id}, properties=notion_page)
+                sleep_util(SLEEP_PERIOD)
+                notion_client.pages.create(parent={"database_id": database_id}, properties=notion_properties)
 
         else:
             raise NotImplementedError
@@ -296,7 +371,7 @@ class NotionRecipe:
         next_cursor = None
 
         if recipe_hash is not None:
-            request_payload.update({"filter": {"property": "Paprika Hash", "text": {"equals": recipe_hash}}})
+            request_payload.update({"filter": {"and": [{"property": "Paprika Hash", "rich_text": {"equals": recipe_hash}}]}})
 
         # Will try to get _all_ rows if no
         while has_more:
@@ -306,7 +381,7 @@ class NotionRecipe:
                         **request_payload
                     )
                 except:
-                    sleep_util(30)
+                    sleep_util(SLEEP_PERIOD)
                     query = notion_client.databases.query(
                         **request_payload
                     )
@@ -318,7 +393,7 @@ class NotionRecipe:
                         **request_payload
                     )
                 except:
-                    sleep_util(30)
+                    sleep_util(SLEEP_PERIOD)
                     query = notion_client.databases.query(
                         **request_payload
                     )
@@ -329,7 +404,7 @@ class NotionRecipe:
             i += 1
 
         end = time.time()
-        logger.info('Number of rows in notion currently: ' + str(len(all_notion_rows)))
-        logger.info('Total time taken: ' + str(end - start))
+        logger.debug('Number of rows in notion currently: ' + str(len(all_notion_rows)))
+        logger.debug('Total time taken: ' + str(end - start))
 
         return all_notion_rows
