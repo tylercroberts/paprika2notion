@@ -1,4 +1,8 @@
-# Setup
+# paprika2notion
+![](https://img.shields.io/pypi/v/paprika2notion)
+![](https://img.shields.io/badge/Python-3.7%2C%203.8-blue)
+
+## Setup
 Run `pip install paprika2notion`
 
 V0 of this library will assume you have downloaded and extracted your recipes to some path that we will refer to as: `path/to/your/extracted/recipe.paprikarecipe.yaml`
@@ -20,7 +24,7 @@ The library reads your secrets from environment variables. **See the snippet bel
 I recommend using a secrets manager like Hashicorp Vault (not sponsored) to enable this. 
 Otherwise, you can create a local config file.
 
-# Usage
+## Usage
 
 This library is intended to make it easy for you to load recipes you have stored in [Paprika](https://www.paprikaapp.com/) into your Notion Workspace.
 
@@ -53,10 +57,10 @@ By default, the tool will do a few things:
 - Paprika's `Directions` are written to `Recipe write-up`, and if > 2000 characters, overflow goes to `Recipe write-up overflow`
 
 
-# Contribution
+## Contributing
 
-There are a number of ways to contribute to paprika2notion.
-
+There are a number of ways to contribute to `paprika2notion`.
+- If you found this useful, the biggest thing you could do is star the repo.
 - Check out open Issues and submit a PR to resolve one
   - if you don't want to submit a PR, feel free to join the discussion on these issues anyways!
 - Use the tool and make improvements to solve your pain points
