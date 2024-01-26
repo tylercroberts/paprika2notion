@@ -9,7 +9,7 @@ You must then create a Notion database that provides write-access to a Notion in
 
 This database must contain, at minimum the following fields. Note that spelling matters, as the names are used for writing the template.:
 - Title: `Recipe`
-- Rich Text: `Recipe write-up`, `Paprika Hash`
+- Rich Text: `Recipe write-up`, `Recipe write-up overflow`,  `Paprika Hash`, `Nutritional Info`
 - Select: `Status`, `Meal Type`, `Tags`
 - URL: `URL`
 
@@ -20,11 +20,9 @@ The library reads your secrets from environment variables. **See the snippet bel
 I recommend using a secrets manager like Hashicorp Vault (not sponsored) to enable this. 
 Otherwise, you can create a local config file.
 
-
 # Usage
 
 This library is intended to make it easy for you to load recipes you have stored in [Paprika](https://www.paprikaapp.com/) into your Notion Workspace.
-
 
 Once you have downloaded and extracted your recipes, you can load them as objects in python, edit them, and write to notion if you wish. 
 
@@ -63,7 +61,6 @@ There are a number of ways to contribute to paprika2notion.
   - if you don't want to submit a PR, feel free to join the discussion on these issues anyways!
 - Use the tool and make improvements to solve your pain points
   - Find something annoying? We'd love your help fixing it! Anything that could make this a more seamless tool is probably welcome.
-  - 
 
 - Some planned items that you're free to take a stab at before I get to them:
   - Automatically create appropriate Database/Page/Schema in Notion from tool

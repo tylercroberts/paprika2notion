@@ -25,9 +25,9 @@ def sleep_util(sleep_time: int=30):
 @dataclass
 class PaprikaRecipe:
     """
-    From: `paprika-recipes`: https://github.com/coddingtonbear/paprika-recipes/tree/master
+    Modified from: `paprika-recipes`: https://github.com/coddingtonbear/paprika-recipes/tree/master
 
-    I wasn't sure exactly how to use this from the installed tool, so I've just re-created it here.
+    I wasn't sure exactly how to use this from the installed tool, so I've just re-created it here with the changes I needed
     """
     categories: List[str] = field(default_factory=list)
     cook_time: str = ""
@@ -98,10 +98,14 @@ class PaprikaRecipe:
         return f"<{self}>"
 
 
-
 @dataclass
 class NotionRecipe:
-    #TODO: This should query to get exact ID for fields, but will work for now with field names.
+    # TODO: This should query to get exact ID for fields, but will work for now with field names.
+
+    # TODO: Also, maybe some of the Notion logic can be abstracted away in a base class, so this just calls methods like:
+    # `gen_title_property(property_name, property_value, **property_kwargs)`,
+    # `gen_text_property(property_name, property_value, **property_kwargs)`,
+    # `gen_select_property(property_name, property_value, **property_kwargs)`
 
     recipe: str = ""
     recipe_write_up: str = ""
@@ -109,7 +113,7 @@ class NotionRecipe:
     ingredients_text: str = ""
     meal_type: Optional[RecipeMealTypeEnum] = None
     status: Optional[RecipeStatusEnum] = None
-    nutritional_info: str= ""
+    nutritional_info: str = ""
     ingredients: Any = None
     meal_plan: Any = None
     url: str = ""
@@ -138,7 +142,10 @@ class NotionRecipe:
             url=paprika_recipe.source_url,
             tags=paprika_recipe.categories,
             paprika_hash=paprika_recipe.hash,
-            nutritional_info=
+
+            # TODO: Could probably split by some sort of regex like: "\w\: \d{0,10}\\/?.?\d{0,4}"
+            nutritional_info=paprika_recipe.nutritional_info
+
 
         )
 
@@ -164,7 +171,6 @@ class NotionRecipe:
     def _parse_ingredients_string_from_paprika(paprika_recipe):
         ingredients_str = "\n".join(["- " + i for i in paprika_recipe.ingredients.split("\n")])
         return ingredients_str
-
 
     def get_title_property(self):
         return {
@@ -193,6 +199,7 @@ class NotionRecipe:
                 ]
             }
         }
+
     def get_recipe_write_up_overflow_property(self):
         return {
             "Recipe write-up overflow": {
@@ -205,6 +212,7 @@ class NotionRecipe:
                 ]
             }
         }
+
     def get_ingredients_text_property(self):
         return {
             "Ingredients Text": {
@@ -260,7 +268,25 @@ class NotionRecipe:
             }
         }
 
-    def get_all_properties(self):
+    def get_nutritional_info_property(self):
+        return {
+            "Nutritional Info": {
+                "rich_text": [
+                    {
+                        "text": {
+                            "content": self.nutritional_info
+                        }
+                    }
+                ]
+            }
+        }
+
+    def get_all_properties(self, **kwargs):
+        """
+
+        :param kwargs:
+        :return:
+        """
         properties = {}
         properties.update(self.get_title_property())
         properties.update(self.get_recipe_write_up_property())
@@ -271,18 +297,19 @@ class NotionRecipe:
         properties.update(self.get_url_property())
         properties.update(self.get_tags_property())
         properties.update(self.get_paprika_hash())
+        properties.update(self.get_nutritional_info_property())
         return properties
 
-    def gen_page_template(self, database_id: str) -> Dict[str, Any]:
+    def gen_page_template(self, database_id: str, **kwargs) -> Dict[str, Any]:
         """
-        Main entrypoint for generating the page template to POST via Notion API. See each individual function in
+        Generates an example of the page template that would be POSTed to Notion API. See each individual function in
         `get_all_properties()` for details on any available kwargs.
 
 
         :return:
         """
         page = dict()
-        properties = self.get_all_properties()
+        properties = self.get_all_properties(**kwargs)
         page["database_id"] = database_id
         page.update({"properties": properties})
         return page
@@ -296,10 +323,11 @@ class NotionRecipe:
 
     def write_to_notion(self, notion_client, database_id):
         #TODO: Maybe just write a `bulk` write_to_notion` as well,
-        # similar functionality to the CLI, so we can just call this there.
+        # similar functionality to the CLI, so we can just call this there for consistency/freedom of how to use this.
 
         all_notion_rows = self.get_all_notion_rows(notion_client, database_id, recipe_hash=self.paprika_hash)
-        # TODO: If this just returns NotionRecipe items, it would be easier to do this check.
+        # TODO: If this just returns NotionRecipe items instead of dicts, it would be easier to do this check.
+        # At least use .get()....
         matching_notion_row = [
             row for row in all_notion_rows
             if row['properties']['Paprika Hash']['rich_text'][0]['text']['content'] == self.paprika_hash
@@ -313,6 +341,7 @@ class NotionRecipe:
             pass
             #TODO: Add some sort of last update concept
             # For now, we just check if the `paprika_hash` exists, if so, skip.
+            # Can add a 'Paprika Last Updated Time' or something. O
 
 
             # mendeleyTime = it.last_modified.to('US/Pacific')
