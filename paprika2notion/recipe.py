@@ -5,6 +5,7 @@ import datetime
 import gzip
 import hashlib
 import json
+import yaml
 from loguru import logger
 import uuid
 from dataclasses import asdict, dataclass, field, fields
@@ -66,6 +67,12 @@ class PaprikaRecipe:
     @classmethod
     def from_file(cls: Type[T], data: IO[bytes]) -> T:
         return cls.from_dict(json.loads(gzip.open(data).read()))
+
+    @classmethod
+    def from_yaml(cls: Type[T], fname) -> T:
+        with open(fname, 'r', encoding='utf8') as f:
+            out = yaml.load(f, Loader=yaml.loader.Loader)
+        return cls.from_dict(out)
 
     @classmethod
     def from_dict(cls: Type[T], data: Dict[str, Any]) -> T:
@@ -305,6 +312,8 @@ class NotionRecipe:
         Generates an example of the page template that would be POSTed to Notion API. See each individual function in
         `get_all_properties()` for details on any available kwargs.
 
+
+        # TODO: Add the blocks for a description section + a Table block filtered to show Ingredients of the current recipe.
 
         :return:
         """
