@@ -1,0 +1,13 @@
+language: python
+
+python:
+  - "3.8"
+
+install:
+  - pip install -e .[dev]
+
+script:
+  - pytest
+  -
+after_sucess:
+  coveralls
