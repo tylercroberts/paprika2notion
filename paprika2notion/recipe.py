@@ -109,7 +109,7 @@ class PaprikaRecipe:
 class NotionRecipe:
     # TODO: This should query to get exact ID for fields, but will work for now with field names.
 
-    # TODO: Also, maybe some of the Notion logic can be abstracted away in a base class, so this just calls methods like:
+    # TODO: Also, maybe some of the Notion logic can be abstracted away in a base/injected class, so this just calls methods like:
     # `gen_title_property(property_name, property_value, **property_kwargs)`,
     # `gen_text_property(property_name, property_value, **property_kwargs)`,
     # `gen_select_property(property_name, property_value, **property_kwargs)`
@@ -129,6 +129,11 @@ class NotionRecipe:
                 str(uuid.uuid4()).encode("utf-8")
             ).hexdigest()
         )
+    def __str__(self):
+        return self.recipe
+
+    def __repr__(self):
+        return f"<{self}>"
 
     @classmethod
     def from_paprika(cls: Type[TNotionRecipe], paprika_recipe: PaprikaRecipe) -> TNotionRecipe:
@@ -330,7 +335,7 @@ class NotionRecipe:
         """
         raise NotImplementedError
 
-    def write_to_notion(self, notion_client, database_id):
+    def write_to_notion(self, notion_client, database_id, dryrun=False):  # pragma: no cover
         #TODO: Maybe just write a `bulk` write_to_notion` as well,
         # similar functionality to the CLI, so we can just call this there for consistency/freedom of how to use this.
 
@@ -375,18 +380,23 @@ class NotionRecipe:
             logger.info(f'No results matched query for {self.recipe} - {self.paprika_hash}. Creating new row')
             # extract properties and format it well
             notion_properties = self.get_all_properties()
-            try:
-                notion_client.pages.create(parent={"database_id": database_id}, properties=notion_properties)
-            except:  # TODO: See note in `get_all_notion_rows()` about this sleeping on _any_ error.
-                sleep_util(SLEEP_PERIOD)
-                notion_client.pages.create(parent={"database_id": database_id}, properties=notion_properties)
+
+
+            if not dryrun:
+                try:
+                    notion_client.pages.create(parent={"database_id": database_id}, properties=notion_properties)
+                except:  # TODO: See note in `get_all_notion_rows()` about this sleeping on _any_ error.
+                    sleep_util(SLEEP_PERIOD)
+                    notion_client.pages.create(parent={"database_id": database_id}, properties=notion_properties)
+            else:
+                return self.gen_page_template()
 
         else:
             raise NotImplementedError
 
     @classmethod
     def get_all_notion_rows(cls: Type[TNotionRecipe], notion_client,
-                            database_id: str, recipe_hash: str=None) -> List[TNotionRecipe]:
+                            database_id: str, recipe_hash: str=None) -> List[TNotionRecipe]:  # pragma: no cover
         """
         Gets all rows (pages) from a notion database using a notion client
         # TODO: Currently if there are _any_ errors, it waits 30s before failing.
