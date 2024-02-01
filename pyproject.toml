@@ -19,6 +19,17 @@ dependencies = [
     "notion-client",
     "loguru",
 ]
+[project.optional-dependencies]
+dev = [
+    "build",
+    "twine",
+    "pytest==5.2.1",
+    "pytest-cov==2.8.1",
+    "coverage-badge",
+    "coveralls"
+]
+docs = ["sphinx"]
+
 
 [build-system]
 requires = ["flit_core >=3.2,<4"]
